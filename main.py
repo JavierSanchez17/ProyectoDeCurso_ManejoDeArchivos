@@ -1,43 +1,69 @@
 import os
 import json
-import time
-from tkinter import Tk, filedialog, Listbox, Label, Button, END, Toplevel, Entry, StringVar, messagebox
+from tkinter import Tk, filedialog, Listbox, Label, Button, END, Toplevel, Entry, StringVar, messagebox, Frame
+from PIL import Image, ImageTk
+from tkinter import LEFT, RIGHT, BOTH, Y
 
 
 class GIFDataExtractorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("GIF Data Extractor")
+        self.root.configure(bg="black")  # Fondo negro de la ventana principal
+
+        # Diccionarios para almacenar metadata y rutas
         self.file_metadata = {}
         self.metadata_file = "metadata.json"
+        self.file_paths = {}
 
-        # Verificar si ya se ha abierto antes
+        # Inicializar índice y lista de fotogramas
+        self.current_frame_index = 0
+        self.frames = []
+
+        # Etiqueta para el GIF (será usada en una ventana emergente)
+        self.gif_label = Label(root)
+
+        # Verificar si es la primera ejecución
         if os.path.exists(self.metadata_file):
             self.load_metadata()
         else:
-            messagebox.showinfo("Primera vez",
-                                "Es la primera vez que abres la aplicación. Selecciona una carpeta para comenzar.")
+            messagebox.showinfo("Primera vez", "Es la primera vez que abres la aplicación. Selecciona una carpeta "
+                                               "para comenzar.")
 
-        # Widgets principales
-        self.gif_list = Listbox(root, width=50, height=20)
-        self.label = Label(root, text="Información del GIF seleccionada:")
-        self.info_label = Label(root, text="")
-        self.load_button = Button(root, text="Cargar Carpeta", command=self.load_folder)
-        self.save_button = Button(root, text="Guardar Metadata", command=self.save_metadata)
-        self.edit_button = Button(root, text="Editar Metadata", command=self.edit_metadata)
+        # Crear un contenedor para dividir la interfaz en paneles izquierdo y derecho
+        main_frame = Frame(root, bg="black")
+        main_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
-        # Ubicación de widgets
-        self.load_button.pack()
-        self.gif_list.pack()
-        self.label.pack()
-        self.info_label.pack()
-        self.save_button.pack()
-        self.edit_button.pack()
+        # Crear el Listbox a la izquierda
+        self.gif_list = Listbox(main_frame, width=50, height=20, bg="gray25", fg="white", font=("Arial", 12))
+        self.gif_list.pack(side=LEFT, fill=Y, padx=(0, 10))  # Espacio entre el Listbox y los botones
 
-        # Evento de selección de GIF
+        # Crear un contenedor para los botones a la derecha
+        button_frame = Frame(main_frame, bg="black")
+        button_frame.pack(side=RIGHT, fill=Y)
+
+        # Configuración de botones con estilo verde y tamaño aumentado
+        button_style = {
+            "bg": "green",
+            "fg": "white",
+            "font": ("Arial", 14, "bold"),
+            "width": 15,
+            "height": 2
+        }
+
+        # Crear los botones y aplicarlos al frame derecho
+        self.load_button = Button(button_frame, text="Cargar Carpeta", command=self.load_folder, **button_style)
+        self.save_button = Button(button_frame, text="Guardar Metadata", command=self.save_metadata, **button_style)
+        self.edit_button = Button(button_frame, text="Editar Metadata", command=self.edit_metadata, **button_style)
+
+        # Ubicar los botones en el panel derecho con espacio entre ellos
+        self.load_button.pack(pady=(0, 10))  # Espacio superior para el primer botón
+        self.save_button.pack(pady=(0, 10))  # Espacio entre los botones
+        self.edit_button.pack(pady=(0, 10))  # Espacio inferior para el último botón
+
+        # Evento de selección en el Listbox
         self.gif_list.bind('<<ListboxSelect>>', self.display_metadata)
 
-    # Cargar los metadatos si el archivo existe
     def load_metadata(self):
         try:
             with open(self.metadata_file, 'r') as file:
@@ -68,45 +94,13 @@ class GIFDataExtractorApp:
                 metadata['background_color'] = int.from_bytes(file.read(1), 'little')
 
                 # Tipo de compresión
-                metadata['compression_type'] = "LZW"  # GIF usa LZW por estándar, no requiere cambio.
+                metadata['compression_type'] = "LZW"
 
-                # Formato numérico (sin datos en GIF, se establece como "N/A")
+                # Formato numérico
                 metadata['numeric_format'] = "N/A"
 
-                # Cantidad de imágenes en GIF
-                image_count = 0
-                while True:
-                    block = file.read(1)
-                    if block == b'\x2C':  # El bloque de imagen comienza con byte 0x2C
-                        image_count += 1
-                    elif block == b'\x3B':  # Byte 0x3B indica el fin del archivo GIF
-                        break
-                    elif not block:
-                        break  # Final de archivo inesperado
-                metadata['image_count'] = image_count
-
-                # Fecha de creación y modificación del sistema de archivos
-                metadata['creation_date'] = time.ctime(os.path.getctime(file_path))
-                metadata['modification_date'] = time.ctime(os.path.getmtime(file_path))
-
-                # Bloque de comentarios
-                file.seek(13)  # Nos desplazamos después de los encabezados iniciales
-                comments = []
-                while True:
-                    block = file.read(1)
-                    if block == b'\x21':  # El bloque de extensión comienza con 0x21
-                        label = file.read(1)
-                        if label == b'\xFE':  # El bloque de comentarios tiene una etiqueta 0xFE
-                            while True:
-                                sub_block_size = ord(file.read(1))
-                                if sub_block_size == 0:
-                                    break
-                                comments.append(file.read(sub_block_size).decode('utf-8', errors='ignore'))
-                    elif block == b'\x3B':  # Fin del archivo
-                        break
-                    elif not block:
-                        break  # Final de archivo inesperado
-                metadata['comments'] = ' '.join(comments) if comments else "N/A"
+                # Cantidad de imágenes
+                metadata['image_count'] = 1
 
                 # Guardar los metadatos en el diccionario principal
                 self.file_metadata[file_path] = metadata
@@ -122,10 +116,10 @@ class GIFDataExtractorApp:
                 if file.lower().endswith('.gif'):
                     gif_path = os.path.join(root, file)
                     self.analyze_gif(gif_path)
-                    gif_files.append(gif_path)
+                    gif_files.append(file)
+                    self.file_paths[file] = gif_path  # Guardar la ruta completa en un diccionario
         return gif_files
 
-    # Funciones de la GUI
     def load_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
@@ -137,7 +131,8 @@ class GIFDataExtractorApp:
     def display_metadata(self, event):
         selection = self.gif_list.curselection()
         if selection:
-            gif_path = self.gif_list.get(selection[0])
+            gif_name = self.gif_list.get(selection[0])
+            gif_path = self.file_paths[gif_name]  # Obtener la ruta completa del diccionario
             metadata = self.file_metadata.get(gif_path, {})
 
             # Formatear los datos según los campos requeridos
@@ -154,7 +149,46 @@ class GIFDataExtractorApp:
                 f"Comentarios agregados: {metadata.get('comments', 'N/A')}"
             )
 
-            messagebox.showinfo("Metadatos del GIF", info_text)
+            # Crear ventana emergente personalizada para mostrar texto y GIF
+            popup = Toplevel(self.root)
+            popup.title("Metadatos del GIF")
+
+            # Crear un marco contenedor para organizar texto e imagen en la misma fila
+            content_frame = Frame(popup)
+            content_frame.pack(padx=10, pady=10)
+
+            # Label para mostrar los metadatos a la izquierda
+            info_label = Label(content_frame, text=info_text, justify="left")
+            info_label.grid(row=0, column=0, padx=(0, 10))
+
+            # Label para mostrar el GIF a la derecha
+            self.gif_label = Label(content_frame)
+            self.gif_label.grid(row=0, column=1)
+
+            # Cargar y mostrar el GIF
+            try:
+                img = Image.open(gif_path)
+                self.frames = []
+                for i in range(img.n_frames):
+                    img.seek(i)
+                    frame = ImageTk.PhotoImage(img.copy())
+                    self.frames.append(frame)
+                self.current_frame_index = 0
+
+                # Iniciar la animación solo si hay fotogramas cargados
+                if self.frames:
+                    self.animate_gif()
+            except Exception as e:
+                print(f"Error al cargar el GIF: {e}")
+
+    def animate_gif(self):
+        # Controlar la animación del GIF
+        if self.frames:
+            frame = self.frames[self.current_frame_index]
+            self.gif_label.configure(image=frame)
+            self.current_frame_index = (self.current_frame_index + 1) % len(self.frames)
+            # Llamar a la función después de 100 ms para crear una animación
+            self.root.after(100, self.animate_gif)
 
     def save_metadata(self):
         save_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
@@ -166,7 +200,8 @@ class GIFDataExtractorApp:
     def edit_metadata(self):
         selection = self.gif_list.curselection()
         if selection:
-            gif_path = self.gif_list.get(selection[0])
+            gif_name = self.gif_list.get(selection[0])
+            gif_path = self.file_paths[gif_name]
             metadata = self.file_metadata.get(gif_path)
             if metadata:
                 EditWindow(self.root, gif_path, metadata, self)
@@ -175,11 +210,11 @@ class GIFDataExtractorApp:
 
 
 class EditWindow:
-    def __init__(self, master, file_path, metadata, app):
+    def __init__(self, master, file_path, metadata, appdata):
         self.top = Toplevel(master)
         self.top.title("Editar Metadata")
         self.file_path = file_path
-        self.app = app
+        self.app = appdata
         self.metadata = metadata
 
         # Crear entradas para cada campo de metadatos
@@ -246,6 +281,6 @@ class EditWindow:
 
 
 if __name__ == "__main__":
-    root = Tk()
-    app = GIFDataExtractorApp(root)
-    root.mainloop()
+    raiz = Tk()
+    app = GIFDataExtractorApp(raiz)
+    raiz.mainloop()
