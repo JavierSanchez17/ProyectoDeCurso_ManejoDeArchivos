@@ -10,7 +10,7 @@ class GIFDataExtractorApp:
     def __init__(self, root):
         self.root = root
         self.root.title("GIF Data Extractor")
-        self.root.configure(bg="black")  # Fondo negro de la ventana principal
+        self.root.configure(bg="black")
 
         # Diccionarios para almacenar metadata y rutas
         self.file_metadata = {}
@@ -21,7 +21,7 @@ class GIFDataExtractorApp:
         self.current_frame_index = 0
         self.frames = []
 
-        # Etiqueta para el GIF (será usada en una ventana emergente)
+        # Etiqueta para el GIF
         self.gif_label = Label(root)
 
         # Verificar si es la primera ejecución
@@ -101,7 +101,17 @@ class GIFDataExtractorApp:
                 metadata['numeric_format'] = "Unsigned Integer (8-bit for colors, 16-bit for size)"
 
                 # Cantidad de imágenes
-                metadata['image_count'] = 1
+                image_count = 0
+                while True:
+                    block_id = file.read(1)
+                    if block_id == b'\x2C':  # Inicio de imagen
+                        image_count += 1
+                    elif block_id == b'':  # Fin del archivo
+                        break
+                    else:
+                        # Saltar otras extensiones
+                        file.seek(int.from_bytes(file.read(1), 'little'), os.SEEK_CUR)
+                metadata['image_count'] = image_count
 
                 # Extraer comentarios
                 comments = []
@@ -218,7 +228,8 @@ class GIFDataExtractorApp:
         # Controlar la animación del GIF
         if self.frames:
             frame = self.frames[self.current_frame_index]
-            self.gif_label.configure(image=frame)
+            if self.gif_label and self.gif_label.winfo_exists():
+                self.gif_label.configure(image=frame)
             self.current_frame_index = (self.current_frame_index + 1) % len(self.frames)
             # Llamar a la función después de 100 ms para crear una animación
             self.root.after(100, self.animate_gif)
