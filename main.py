@@ -241,6 +241,23 @@ class GIFDataExtractorApp:
             else:
                 messagebox.showinfo("Información", "No hay metadatos disponibles para editar")
 
+    @staticmethod
+    def log_change(file_path, old_data, new_data):
+        change_log_file = "change_history.txt"
+        changes = []
+
+        for key in new_data:
+            old_value = old_data.get(key, "N/A")
+            new_value = new_data[key]
+            if old_value != new_value:
+                changes.append(f"{key}: '{old_value}' -> '{new_value}'")
+
+        if changes:
+            with open(change_log_file, "a") as file:
+                file.write(f"Changes for {file_path} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}:\n")
+                file.write("\n".join(changes) + "\n\n")
+        print(f"Changes logged for {file_path}")
+
 
 class EditWindow:
     def __init__(self, master, file_path, metadata, appdata):
@@ -294,7 +311,13 @@ class EditWindow:
         # Botón para guardar los cambios
         Button(self.top, text="Guardar Cambios", command=self.save_changes).grid(row=10, column=0, columnspan=2)
 
+        # Botón para el historial
+        Button(self.top, text="Ver Historial", command=self.show_change_history).grid(row=10, column=1)
+
     def save_changes(self):
+        # Guardar metadatos actuales antes de la actualización
+        old_data = self.app.file_metadata[self.file_path].copy()
+
         # Actualizar metadatos con los valores editados
         new_data = {
             'version': self.version_var.get(),
@@ -309,8 +332,29 @@ class EditWindow:
             'comments': self.comments_var.get()
         }
         self.app.file_metadata[self.file_path].update(new_data)
-        messagebox.showinfo("Información", "Cambios guardados con éxito")
+
+        # Llamar a la función para registrar el cambio en el historial
+        self.app.log_change(self.file_path, old_data, new_data)
+
+        messagebox.showinfo("Información", "Cambios guardados exitosamente.")
         self.top.destroy()
+
+    def show_change_history(self):
+        # Crear una nueva ventana para mostrar el historial de cambios
+        history_window = Toplevel(self.top)
+        history_window.title("Historial de Cambios")
+
+        # Leer el archivo de historial de cambios
+        change_log_file = "change_history.txt"
+        if os.path.exists(change_log_file):
+            with open(change_log_file, "r") as file:
+                change_history = file.read()
+        else:
+            change_history = "No hay cambios registrados."
+
+        # Mostrar el historial de cambios en un Label
+        history_label = Label(history_window, text=change_history, justify="left", font=("Arial", 10))
+        history_label.pack(padx=10, pady=10)
 
 
 if __name__ == "__main__":
