@@ -3,6 +3,7 @@ import json
 from tkinter import Tk, filedialog, Listbox, Label, Button, END, Toplevel, Entry, StringVar, messagebox, Frame
 from PIL import Image, ImageTk
 from tkinter import LEFT, RIGHT, BOTH, Y
+from datetime import datetime
 
 
 class GIFDataExtractorApp:
@@ -97,10 +98,41 @@ class GIFDataExtractorApp:
                 metadata['compression_type'] = "LZW"
 
                 # Formato numérico
-                metadata['numeric_format'] = "N/A"
+                metadata['numeric_format'] = "Unsigned Integer (8-bit for colors, 16-bit for size)"
 
                 # Cantidad de imágenes
                 metadata['image_count'] = 1
+
+                # Extraer comentarios
+                comments = []
+                while True:
+                    block_id = file.read(1)
+                    if not block_id:
+                        break
+                    if block_id == b'\x21':  # Introducción de extensión
+                        label = file.read(1)
+                        if label == b'\xFE':  # Tipo de extensión de comentario
+                            comment_data = b""
+                            while True:
+                                block_size = file.read(1)
+                                if not block_size or block_size == b'\x00':
+                                    break
+                                block_size = ord(block_size)
+                                comment_data += file.read(block_size)
+                            comments.append(comment_data.decode('utf-8', errors='ignore'))
+                        else:
+                            # Saltar otras extensiones
+                            file.seek(int.from_bytes(file.read(1), 'little'), os.SEEK_CUR)
+                    elif block_id == b'\x2C':  # Inicio de imagen
+                        # Saltar a la siguiente imagen o salir si se ha terminado el archivo
+                        break
+                metadata['comments'] = comments if comments else "No comments"
+
+                # Fechas de creación y modificación (del sistema de archivos)
+                metadata['creation_date'] = datetime.fromtimestamp(os.path.getctime(file_path)).strftime(
+                    '%Y-%m-%d %H:%M:%S')
+                metadata['modification_date'] = datetime.fromtimestamp(os.path.getmtime(file_path)).strftime(
+                    '%Y-%m-%d %H:%M:%S')
 
                 # Guardar los metadatos en el diccionario principal
                 self.file_metadata[file_path] = metadata
@@ -137,6 +169,7 @@ class GIFDataExtractorApp:
 
             # Formatear los datos según los campos requeridos
             info_text = (
+                f"Ruta del archivo: {gif_path}\n"
                 f"Número de versión: {metadata.get('version', 'N/A')}\n"
                 f"Tamaño de imagen: {metadata.get('size', 'N/A')}\n"
                 f"Cantidad de colores: {metadata.get('colors', 'N/A')}\n"
